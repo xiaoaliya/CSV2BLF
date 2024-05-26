@@ -1,0 +1,2 @@
+python_can==4.3.1
+ttkbootstrap==1.10.1
