@@ -7,9 +7,8 @@ from tkinter import messagebox
 import csv
 import can
 import threading
-import ctypes
-import time
-import ttkbootstrap as ttkbs
+# pyinstaller --onefile --noconsole --icon=E:\python\blf2csv\ic.ico ttk.py
+
 
 def time_to_seconds(time_str):
     # Split the time string into hours, minutes, seconds, and milliseconds
@@ -37,11 +36,7 @@ def csv_to_blf(csv_filename, blf_filename):
 
         # Create a new BLF file
         with open(blf_filename, 'wb') as blf_file:
-            # Create a Vector CAN bus
-
-            # Create a BLF writer
             blf_writer = can.BLFWriter(blf_file)
-
             # Iterate over each row in the CSV file
             count=0
             for row in csv_reader:
@@ -64,6 +59,42 @@ def csv_to_blf(csv_filename, blf_filename):
             blf_writer.stop()
 
 
+def text_to_blf(text_filename,blf_filename):
+    with open(text_filename) as f:
+        text_line=f.readlines()[12:-1]
+#     处理文本数据
+    for index,tx in enumerate(text_line):
+        text_line[index]=tx.replace('\n','').split(' ')
+    with open(blf_filename, 'wb') as blf_file:
+        blf_writer = can.BLFWriter(blf_file)
+        for item in text_line:
+
+            # 12:16:21.548.0
+            #Message ID
+            # item[0]
+            # Cycle time in ms
+            # item[6]
+            # Data length
+            # item[8]
+            # Frame type
+            # item[10]
+            # data
+            # item[11:19].join(' ')
+
+            timeTemp = '2024-05-25 12:16:21.548.0'
+            timestamp = datetime.timestamp(datetime.strptime(timeTemp[:-2], "%Y-%m-%d %H:%M:%S.%f"))
+            message_id = int(item[0].replace('h',""), 16)
+            data = bytes.fromhex(' '.join(item[11:19]).replace("h",""))
+            dlc = int(item[8])
+
+            # Create a new CAN message
+            message = can.Message(arbitration_id=message_id, data=data, timestamp=timestamp, channel=0, dlc=dlc)
+
+            # Write the message to the BLF file
+            blf_writer.on_message_received(message)
+        blf_writer.stop()
+
+    print("处理后数据",text_line)
 def clear_table_files():
     # 删除所有表格项
     for item in tree.get_children():
@@ -80,7 +111,7 @@ def populate_tree(tree, files):
 def browse_files():
     # 打开文件选择对话框
     files = filedialog.askopenfilenames(title="Select CSV Files",
-                                        filetypes=(("CSV files", "*.csv"), ("All files", "*.*")))
+                                        filetypes=(("CSV files", "*.csv"), ("Text files", "*.txt"), ("All files", "*.*")))
     global files_path_list
     files_path_list=files
     if files:
@@ -98,7 +129,7 @@ def browse_files():
         # 更新表格数据
         populate_tree(tree, file_info_list)
 # 开始任务
-def start_worker():
+def start_worker(use_type):
     # 禁用按钮
     b2.config(state="disabled")
     for file_path in files_path_list:
@@ -106,9 +137,12 @@ def start_worker():
         file_path_full = os.path.split(file_path)
         csv_filename = file_path  # Input CSV file
         # blf_filename = file_path_full[0]+r'/create_csv2blf/'+ file_name.replace('.csv','.blf') # Output BLF file
-        blf_filename = os.getcwd() + r'/create_csv2blf/' + file_name.replace('.csv', '.blf')  # Output BLF file
-
-        csv_to_blf(csv_filename, blf_filename)
+        if use_type == 1:
+            blf_filename = os.getcwd() + r'/create_csv2blf/' + file_name.replace('.csv', '.blf')  # Output BLF file
+            csv_to_blf(csv_filename, blf_filename)
+        elif use_type==2:
+            blf_filename = os.getcwd() + r'/create_csv2blf/' + file_name.replace('.txt', '.blf')  # Output BLF file
+            text_to_blf(csv_filename, blf_filename)
     # 启用按钮
     b2.config(state="enabled")
     messagebox.showinfo("完成", "文件已经全部转换为blf格式，请在create_csv2blf文件夹下查看")
@@ -117,7 +151,19 @@ def start_csv_to_blf():
         messagebox.showinfo("提示", "请先选择文件！")
         return True
     try:
-        threading.Thread(target=start_worker).start()
+        threading.Thread(target=start_worker,args=(1,)).start()
+    except Exception as e:
+        # 启用按钮
+        b2.config(state="enabled")
+        messagebox.showerror("文件转换异常,请联系开发者", str(e))
+
+
+def start_text_to_blf():
+    if len(files_path_list)==0:
+        messagebox.showinfo("提示", "请先选择文件！")
+        return True
+    try:
+        threading.Thread(target=start_worker,args=(2,)).start()
     except Exception as e:
         # 启用按钮
         b2.config(state="enabled")
@@ -184,8 +230,13 @@ b1.grid(row=8,column=0,padx=10,pady=20)
 b2 = ttk.Button(root, text="CSV转blf", bootstyle=PRIMARY,command=start_csv_to_blf, width=20)
 b2.grid(row=8,column=1,padx=10,pady=20)
 
+
+
 b3 = ttk.Button(root, text="重置文件", bootstyle=DARK,command=clear_table_files, width=12)
 b3.grid(row=8,column=2,padx=10,pady=20)
+
+b4 = ttk.Button(root, text="TXT转blf", bootstyle=PRIMARY,command=start_text_to_blf, width=20)
+b4.grid(row=9,column=1,padx=10,pady=5)
 #
 # b2 = ttk.Button(root, text="Button 2", bootstyle=(INFO, OUTLINE))
 # b2.grid(row=0,column=1)
