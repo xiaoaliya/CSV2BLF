@@ -3,6 +3,7 @@ from ttkbootstrap.constants import *
 from tkinter import  filedialog
 import os
 from datetime import datetime
+import datetime as dt
 from tkinter import messagebox
 import csv
 import can
@@ -37,19 +38,33 @@ def csv_to_blf(csv_filename, blf_filename):
         # Create a new BLF file
         with open(blf_filename, 'wb') as blf_file:
             blf_writer = can.BLFWriter(blf_file)
+            global current_date
             # Iterate over each row in the CSV file
             count=0
+            first_row=[]
             for row in csv_reader:
                 if count==0:
+                    first_row=row
                     count += 1
                     continue
-                timeTemp='2024-05-25 '+row[2]
-                timestamp =datetime.timestamp(datetime.strptime(timeTemp[:-2], "%Y-%m-%d %H:%M:%S.%f"))
-                message_id = int(row[3],16)
-                # data = int(row[3],16)
-                data =bytes.fromhex(row[7])
-                dlc =int(row[6],16)
-
+                if "数据长度" in first_row:
+                    timeTemp=current_date+' '+row[2]
+                    timestamp =datetime.timestamp(datetime.strptime(timeTemp[:-2], "%Y-%m-%d %H:%M:%S.%f"))
+                    message_id = int(row[3],16)
+                    data =bytes.fromhex(row[7])
+                    dlc =int(row[6],16)
+                elif "长度" in first_row:
+                    timeTemp=current_date+' 10:'+row[2]
+                    timestamp =datetime.timestamp(datetime.strptime(timeTemp, "%Y-%m-%d %H:%M:%S.%f"))
+                    message_id = int(row[3],16)
+                    data =bytes.fromhex(row[7].replace("x|",""))
+                    dlc =int(row[6],16)
+                elif "DLC" in first_row:
+                    timeTemp = current_date + ' ' + row[1].replace("=","").replace('"',"")
+                    timestamp = datetime.timestamp(datetime.strptime(timeTemp, "%Y-%m-%d %H:%M:%S.%f"))
+                    message_id = int(row[5], 16)
+                    data = bytes.fromhex(row[9].replace("x|",""))
+                    dlc = int(row[8], 16)
                 # Create a new CAN message
                 message = can.Message(arbitration_id=message_id, data=data, timestamp=timestamp,channel=0,dlc=dlc)
 
@@ -169,7 +184,7 @@ def start_text_to_blf():
         b2.config(state="enabled")
         messagebox.showerror("文件转换异常,请联系开发者", str(e))
 
-
+current_date = str(dt.date.today())
 STARTSTATUS=True
 root = ttk.Window(title="two white 格式转换工具")
 # 设置窗口图标
